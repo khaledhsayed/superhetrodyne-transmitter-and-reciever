@@ -1,0 +1,151 @@
+%------------------------------Hetrodyne Transmitter----------------------%
+clear all;
+clc ;
+close all ;
+%reading the two files
+[audio1 , Fs1] = audioread('Short_QuranPalestine.wav') ;
+[audio2 , Fs2] = audioread('Short_FM9090.wav');
+%taking only one vector of the files
+all_message1 = audio1(: , 1) ;
+all_message2 = audio2(: , 1) ;
+all_message1=all_message1(1:length(all_message1)/2) ;
+all_message2=all_message2(1:length(all_message2)/2) ;
+%divite the length of the messages by 4 to remove some problems
+%taking more samples by interp func. to achieve Nyquist rule (10Fs )
+message1=interp(all_message1 , 10 ) ;
+message2=interp(all_message2 , 10 ) ;
+Fs1 = Fs1 * 10 ;
+Fs2 = Fs2 * 10 ;
+%carriers with 100+50n KHZ
+n1 = 1 : length(message1) ;
+n2 = 1 : length(message2) ;
+Ts1 = 1/Fs1 ;
+Ts2 = 1/Fs2 ;
+carrier1 = cos(2*pi*100*1000*n1*Ts1) ;
+carrier2 = cos(2*pi*150*1000*n2*Ts2) ;
+%Modulating signals
+modulated1 = message1' .* carrier1 ;
+at offset of 0.1 KHZ the sound was attenuated a little that the sound is like
+to be with eco while at offset of 1KHZ the sound is more attenuated and that
+is due to the problem of coherent detection that it should be with the same
+frequency of the modulated carrier and any offset will cause a resultant
+cosine with different frequency then attenuation
+
+modulated2 = message2' .* carrier2 ;
+modulated2=[modulated2 zeros(1,length(modulated1)-length(modulated2))] ;
+%make the two modulated messages to be with the same length
+%by padding modulated2 with zeros
+%FDM (adding all modulated signal on the same channel)
+channel = modulated1 + modulated2 ;
+%plotting spectrum of the channel
+N = length(channel); % Make frequency vector f
+Channel = fft(channel , N); % perform FFT on signal x(t)
+f = [-N/2:N/2-1]*(Fs1/N); % that spans frequencies from -500 Hz to 500 Hz
+figure(1) % Create Figure 2
+plot(f,abs(fftshift(Channel))) % Plot positive and negative spectrum of x(t)
+%axis([-5 5 0 3000]); % Set x-axis range [-5 5] Hz and y-axis [0 3000]
+title('Transmitter output Spectrum'); % Add Frequency Domain as title of
+Figure 2
+xlabel('Frequency (Hz)'); % Add Frequency (Hz) as x-axis label of Figure 2
+ylabel('Magnitude'); % Add Magnitude as y-axis label of Figure 2
+%plotting spectrum of the message1
+N = length(channel); % Make frequency vector f
+M1 = fft(all_message1 , N); % perform FFT on signal x(t)
+f = [-N/2:N/2-1]*(Fs1/N); % that spans frequencies from -500 Hz to 500 Hz
+figure(2) % Create Figure 2
+plot(f,abs(fftshift(M1))) % Plot positive and negative spectrum of x(t)
+%axis([-5 5 0 3000]); % Set x-axis range [-5 5] Hz and y-axis [0 3000]
+title('Message1 Spectrum'); % Add Frequency Domain as title of Figure 2
+xlabel('Frequency (Hz)'); % Add Frequency (Hz) as x-axis label of Figure 2
+ylabel('Magnitude'); % Add Magnitude as y-axis label of Figure 2
+%----------------------------Hetrodyne Reciever---------------------------%
+%==================RF stage========%
+F_IF = 25 * 1000 ; %25KHZ
+Fc = 100 * 1000 ; %100KHZ
+BW = 2*5*1000 ; % bandwidth of the baseband message1
+%designning BPF with butter & filter functions
+Upper_freq = Fc +F_IF ; %should be less than Fc+2*F_if
+Lower_Freq = Fc - BW+10000 ; %should be greater than Fc-2*F_if
+Normalized_upper_freq = Upper_freq / (Fs1/2) ; %normalization with Fs/2
+Normalized_Lower_Freq = Lower_Freq / (Fs1/2) ; %normalization with Fs/2
+[b5,a5]=butter(5,[Normalized_Lower_Freq Normalized_upper_freq]);
+RF_out=filter(b5,a5,channel);
+%drawing the output of the RF stage
+N = length(channel); % Make frequency vector f
+RF_OUT = fft(RF_out , N); % perform FFT on signal x(t)
+f = [-N/2:N/2-1]*(Fs1/N); % that spans frequencies from -500 Hz to 500 Hz
+figure(3) % Create Figure 2
+plot(f,abs(fftshift(RF_OUT))) % Plot positive and negative spectrum of x(t)
+%axis([-5 5 0 3000]); % Set x-axis range [-5 5] Hz and y-axis [0 3000]
+title('RF Stage output'); % Add Frequency Domain as title of Figure 2
+xlabel('Frequency (Hz)'); % Add Frequency (Hz) as x-axis label of Figure 2
+
+ylabel('Magnitude'); % Add Magnitude as y-axis label of Figure 2
+
+%==================Mixer stage========%
+F_L_O = Fc + F_IF ;
+nn=(0:N-1)/Fs1 ;
+Mixer_carrier = cos(2*pi*F_L_O*nn) ;
+Mixer_out = 2.*RF_out .* Mixer_carrier ;
+%drawing the output of the Mixer stage
+N = length(channel); % Make frequency vector f
+MIXER_OUT = fft(Mixer_out); % perform FFT on signal x(t)
+f = [-N/2:N/2-1]*(Fs1/N); % that spans frequencies from -500 Hz to 500 Hz
+figure(4) % Create Figure 2
+plot(f,abs(fftshift(MIXER_OUT , N))) % Plot positive and negative spectrum
+of x(t)
+%axis([-5 5 0 3000]); % Set x-axis range [-5 5] Hz and y-axis [0 3000]
+title('MIXER Stage output'); % Add Frequency Domain as title of Figure 2
+xlabel('Frequency (Hz)'); % Add Frequency (Hz) as x-axis label of Figure 2
+ylabel('Magnitude'); % Add Magnitude as y-axis label of Figure 2
+%==================IF stage========%
+%designning BPF with butter & filter functions
+%message now is centerred a W_IF and with bandwidth = 2BW
+Upper_freq = F_IF + BW ;
+Lower_Freq = F_IF - BW ;
+Normalized_upper_freq = Upper_freq / (Fs1/2) ; %normalization with Fs/2
+Normalized_Lower_Freq = Lower_Freq / (Fs1/2) ; %normalization with Fs/2
+[b,a]=butter(5,[Normalized_Lower_Freq Normalized_upper_freq]);
+IF_out=filter(b,a,Mixer_out);
+%drawing the output of the IF stage
+N = length(channel); % Make frequency vector f
+IF_OUT = fft(IF_out , N); % perform FFT on signal x(t)
+f = [-N/2:N/2-1]*(Fs1/N); % that spans frequencies from -500 Hz to 500 Hz
+figure(5) % Create Figure 2
+plot(f,abs(fftshift(IF_OUT))) % Plot positive and negative spectrum of x(t)
+%axis([-5 5 0 3000]); % Set x-axis range [-5 5] Hz and y-axis [0 3000]
+title('IF Stage output'); % Add Frequency Domain as title of Figure 2
+xlabel('Frequency (Hz)'); % Add Frequency (Hz) as x-axis label of Figure 2
+ylabel('Magnitude'); % Add Magnitude as y-axis label of Figure 2
+%==================Baseband detection stage========%
+detection_carrier = cos(2*pi*F_IF*nn) ;
+detection_out = 2.*IF_out .* detection_carrier ;
+%drawing the output of the mixer at detection stage
+N = length(channel); % Make frequency vector f
+DETECTION_OUT = fft(detection_out , N); % perform FFT on signal x(t)
+f = [-N/2:N/2-1]*(Fs1/N); % that spans frequencies from -500 Hz to 500 Hz
+figure(6) % Create Figure 2
+plot(f,abs(fftshift(DETECTION_OUT))) % Plot positive and negative spectrum
+of x(t)
+
+title('mixer at detection stage output'); % Add Frequency Domain as title of
+Figure 2
+xlabel('Frequency (Hz)'); % Add Frequency (Hz) as x-axis label of Figure 2
+ylabel('Magnitude'); % Add Magnitude as y-axis label of Figure 2
+Normalized_freq = 2*BW / (Fs1/2) ; %normalization with Fs/2
+[b2,a2]=butter(4, Normalized_freq);
+lpf_out=filter(b2,a2,detection_out);
+Reciever_out = lpf_out ;
+%drawing the output of the low pass filter
+N = length(channel); % Make frequency vector f
+RECIEVER_OUT = fft(Reciever_out , N); % perform FFT on signal x(t)
+f = [-N/2:N/2-1]*(Fs1/N); % that spans frequencies from -500 Hz to 500 Hz
+figure(7) % Create Figure 2
+plot(f,abs(fftshift(RECIEVER_OUT))) % Plot positive and negative spectrum of
+x(t)
+title('low pass filter output'); % Add Frequency Domain as title of Figure 2
+xlabel('Frequency (Hz)'); % Add Frequency (Hz) as x-axis label of Figure 2
+ylabel('Magnitude'); % Add Magnitude as y-axis label of Figure 2
+audiowrite('RECIEVER_OUTPUT.wav', Reciever_out , Fs1) ;
+extract_signal = decimate(Reciever_out, 48 );
+sound(extract_signal);
